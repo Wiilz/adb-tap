@@ -15,8 +15,9 @@ class PresetNotFound(Exception):
 def resolve_target(config_path: Path, target_args: list[str]) -> tuple[int, int]:
     """将 rush 的目标参数解析为 (x, y)。
 
-    - 1 个参数 → 当作预设名查找
-    - 2 个参数 → 当作 "x y" 坐标
+    - 1 个参数 → 当作预设名查找（不存在抛 PresetNotFound，消息含可用预设）
+    - 2 个参数 → 当作 "x y" 坐标（非整数抛 ValueError，由调用方负责用户化提示）
+    - 其它个数 → 抛 ValueError
     """
     if len(target_args) == 1:
         name = target_args[0]
@@ -27,6 +28,10 @@ def resolve_target(config_path: Path, target_args: list[str]) -> tuple[int, int]
                 f"{list(presets.list_presets(config_path))}"
             )
         return coords
+    if len(target_args) != 2:
+        raise ValueError(
+            f"target 参数个数无效：期望 1（预设名）或 2（x y），实际 {len(target_args)}"
+        )
     x = int(target_args[0])
     y = int(target_args[1])
     return x, y
