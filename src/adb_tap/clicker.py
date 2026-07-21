@@ -2,10 +2,17 @@
 
 import random
 import time
+from typing import Callable, Protocol
+
+
+class TapDevice(Protocol):
+    """点击设备协议：需实现 tap(x, y)。"""
+
+    def tap(self, x: int, y: int) -> None: ...
 
 
 def run_clicks(
-    device,
+    device: TapDevice,
     base_x: int,
     base_y: int,
     *,
@@ -13,18 +20,18 @@ def run_clicks(
     offset: int = 4,
     max_clicks: int | None = None,
     duration: float | None = None,
-    on_progress=None,
-    sleep=time.sleep,
-    clock=time.time,
+    on_progress: Callable[[int], None] | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.monotonic,
 ) -> int:
     """循环点击，返回总点击次数。
 
-    - device：协议对象，需实现 tap(x, y)
+    - device：需实现 tap(x, y) 的对象（如 device.AdbShell）
     - interval_ms：点击间隔（毫秒），实际下限 10ms
     - offset：随机偏移像素（±offset）
-    - max_clicks / duration：任一满足即停止；都为 None 则直到外部中断
-    - on_progress(count)：每次点击后回调，用于 CLI 输出统计
-    - sleep / clock：测试注入
+    - max_clicks / duration：任一满足即停止；都为 None 则阻塞直至外部中断（KeyboardInterrupt）
+    - on_progress(count)：每次点击后回调，应保持轻量（高频点击时每秒被调用多次）
+    - sleep / clock：用于测试注入；默认 clock 用 monotonic 保证计时不受系统时间调整影响
     """
     interval = max(interval_ms, 10) / 1000.0
     start = clock()
