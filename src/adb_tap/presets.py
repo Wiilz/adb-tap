@@ -1,8 +1,9 @@
 """预设坐标管理：读写 config.json，格式 {"名称": {"x": int, "y": int}}。"""
 
 import json
+import os
+import tempfile
 from pathlib import Path
-
 from typing import Any
 
 
@@ -18,10 +19,17 @@ def _read(config_path: Path) -> dict[str, Any]:
 
 
 def _write(config_path: Path, data: dict[str, Any]) -> None:
-    """写入配置文件。"""
-    config_path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    """写入配置文件（原子替换，避免中断留下损坏文件）。"""
+    content = json.dumps(data, ensure_ascii=False, indent=2)
+    fd, tmp = tempfile.mkstemp(dir=config_path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp, config_path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
 
 
 def list_presets(config_path: Path) -> dict[str, dict[str, int]]:

@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from adb_tap import presets
 
