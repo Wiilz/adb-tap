@@ -24,11 +24,12 @@ def calibrated_now(offset: float) -> float:
 def parse_target_time(hhmmss: str, now: datetime | None = None) -> float:
     """将 HH:MM:SS 解析为最近的目标 Unix 时间戳。
 
-    若今天的该时刻已过，顺延到明天。`now` 仅用于测试注入。
+    若今天的该时刻已过（严格早于 now）则顺延到明天；恰等于 now 时按今天处理。
+    `now` 仅用于测试注入。
     """
-    now = now or datetime.now()
+    now = now if now is not None else datetime.now()
     hour, minute, second = (int(part) for part in hhmmss.split(":"))
     target = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
-    if target <= now:
+    if target < now:
         target += timedelta(days=1)
     return target.timestamp()

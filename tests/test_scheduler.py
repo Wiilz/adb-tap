@@ -66,7 +66,14 @@ def test_parse_target_time_rolls_to_tomorrow():
     assert target == expected
 
 
-@pytest.mark.parametrize("bad", ["12:00", "25:00:00", "12:60:00", "abc", ""])
+@pytest.mark.parametrize("bad", ["12:00", "25:00:00", "12:60:00", "abc", "", "12:00:00:00"])
 def test_parse_target_time_rejects_invalid(bad):
     with pytest.raises((ValueError, IndexError)):
         scheduler.parse_target_time(bad, now=datetime.now())
+
+
+def test_parse_target_time_exactly_now_keeps_today():
+    """恰好在目标时刻调用时按今天处理，不顺延到明天。"""
+    now = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+    target = scheduler.parse_target_time("12:00:00", now=now)
+    assert target == now.timestamp()
