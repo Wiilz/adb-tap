@@ -44,3 +44,15 @@ def test_confirm_continue_rejects_no(monkeypatch):
 def test_confirm_continue_defaults_to_no(monkeypatch):
     monkeypatch.setattr("builtins.input", lambda _: "")
     assert cli.confirm_continue("继续吗？") is False
+
+
+def test_cmd_rush_returns_2_on_missing_preset(tmp_path):
+    """缺失预设时 cmd_rush 给友好提示并返回 2，不连设备。"""
+    from argparse import Namespace
+
+    config = tmp_path / "config.json"
+    args = Namespace(
+        target=["missing"], at=None, interval=20, duration=None,
+        no_ntp=True, ntp_server="ntp.aliyun.com", adb_path=None,
+    )
+    assert cli.cmd_rush(config, args) == 2

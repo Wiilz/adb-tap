@@ -1,6 +1,7 @@
 """命令行入口：解析参数并组装 device / clicker / scheduler / presets。"""
 
 import argparse
+import sys
 import time
 from pathlib import Path
 
@@ -90,7 +91,10 @@ def _sync_time(args) -> float:
         offset = scheduler.sync_offset(args.ntp_server, timeout=3.0)
     except Exception as exc:  # 网络异常、超时等
         print(f"⚠️ NTP 校时失败：{exc}")
-        if not confirm_continue("是否用本地时间继续？"):
+        try:
+            if not confirm_continue("是否用本地时间继续？"):
+                raise SystemExit("已取消")
+        except (EOFError, KeyboardInterrupt):
             raise SystemExit("已取消")
         return 0.0
     print(f"✅ 时间已校准（本地偏差 {offset:+.3f}s）")
@@ -99,56 +103,92 @@ def _sync_time(args) -> float:
 
 def cmd_rush(config_path: Path, args) -> int:
     # 1. 解析目标坐标
-    x, y = resolve_target(config_path, args.target)
+    try:
+        x, y = resolve_target(config_path, args.target)
+    except PresetNotFound as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
 
-    # 2. 连接设备（提前就绪，不占抢票时间）
-    adb_path = device.resolve_adb_path(args.adb_path)
+    # 2. 解析 ADB 路径并连接设备
+    try:
+        adb_path = device.resolve_adb_path(args.adb_path)
+    except FileNotFoundError as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
     print(f"🔌 连接设备（ADB: {adb_path}）...")
-    shell = device.AdbShell(adb_path)
+    try:
+        shell = device.AdbShell(adb_path)
+    except RuntimeError as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
     print(f"✅ 设备就绪：{shell.serial}")
 
-    # 3. NTP 校时
-    offset = _sync_time(args)
-
-    # 4. 定时等待
-    if args.at:
-        target = scheduler.parse_target_time(args.at)
-        print(f"⏰ 目标时间 {args.at}，开始倒计时...")
-        scheduler.wait_until(
-            target, offset, on_tick=lambda r: print(f"\r距开票还有 {r}", end="", flush=True)
-        )
-        print()  # 倒计时换行
-
-    # 5. 极速点击
     interval_ms = args.interval
-    print(f"🚀 开始在 ({x}, {y}) 附近极速点击（间隔 {interval_ms}ms，Ctrl+C 停止）...")
-    start = time.time()
+    start = time.monotonic()
+    total_clicks = 0
+    last_seen = 0
+    interrupted = False
 
     def _do_clicks(dev) -> int:
+        def on_progress(c: int) -> None:
+            nonlocal last_seen
+            last_seen = c
+            print(
+                f"\r✅ 已点击 {total_clicks + c} 次 | {time.monotonic() - start:.1f}s",
+                end="", flush=True,
+            )
+
         return clicker.run_clicks(
             dev, base_x=x, base_y=y,
             interval_ms=interval_ms, duration=args.duration,
-            on_progress=lambda c: print(
-                f"\r✅ 已点击 {c} 次 | {time.time() - start:.1f}s",
-                end="", flush=True,
-            ),
+            on_progress=on_progress,
         )
 
-    count = 0
     try:
+        # 3. NTP 校时
+        offset = _sync_time(args)
+
+        # 4. 定时等待
+        if args.at:
+            try:
+                target = scheduler.parse_target_time(args.at)
+            except (ValueError, IndexError) as exc:
+                print(f"错误：--at 时间格式无效（{exc}）", file=sys.stderr)
+                return 2
+            print(f"⏰ 目标时间 {args.at}，开始倒计时...")
+            scheduler.wait_until(
+                target, offset,
+                on_tick=lambda r: print(f"\r距开票还有 {r}", end="", flush=True),
+            )
+            print()  # 倒计时换行
+
+        # 5. 极速点击
+        print(f"🚀 开始在 ({x}, {y}) 附近极速点击（间隔 {interval_ms}ms，Ctrl+C 停止）...")
         try:
-            count = _do_clicks(shell)
+            total_clicks += _do_clicks(shell)
         except BrokenPipeError:
             print("\n⚠️ shell 断开，尝试重连一次...")
-            shell = device.AdbShell(adb_path)
-            count = _do_clicks(shell)
+            try:
+                shell.close()
+            except Exception:
+                pass
+            try:
+                shell = device.AdbShell(adb_path)
+            except RuntimeError as exc:
+                print(f"\n❌ 重连失败：{exc}", file=sys.stderr)
+                interrupted = True
+            else:
+                last_seen = 0
+                total_clicks += _do_clicks(shell)
     except KeyboardInterrupt:
-        count = -1  # 标记为中断，下方统一输出
+        interrupted = True
     finally:
         shell.close()
 
-    elapsed = time.time() - start
-    print(f"\n🔚 停止。共点击 {count if count >= 0 else '?'} 次，耗时 {elapsed:.1f}s")
+    elapsed = time.monotonic() - start
+    final_count = total_clicks + last_seen if interrupted else total_clicks
+    suffix = "（已中断）" if interrupted else ""
+    print(f"\n🔚 停止{suffix}。共点击 {final_count} 次，耗时 {elapsed:.1f}s")
     return 0
 
 
@@ -188,6 +228,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows 默认 cp936 会导致中文/emoji 乱码，强制 stdout/stderr 用 UTF-8
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except (ValueError, OSError):
+                pass
+
     parser = build_parser()
     args = parser.parse_args(argv)
     config_path = Path(args.config)
