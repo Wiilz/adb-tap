@@ -67,3 +67,15 @@ def test_corrupted_file_treated_as_empty(tmp_path):
     assert presets.list_presets(config) == {}
     presets.add_preset(config, "buy", 540, 1200)
     assert presets.get_preset(config, "buy") == (540, 1200)
+
+
+def test_get_preset_invalid_structure_returns_none(tmp_path):
+    """手编 config 结构无效时 get_preset 返回 None 而非抛错。"""
+    config = tmp_path / "config.json"
+    config.write_text(
+        '{"bad": {"x": "abc"}, "list": [1, 2], "partial": {"x": 5}}',
+        encoding="utf-8",
+    )
+    assert presets.get_preset(config, "bad") is None      # 坐标非整数
+    assert presets.get_preset(config, "list") is None      # 值非 dict
+    assert presets.get_preset(config, "partial") is None   # 缺 y

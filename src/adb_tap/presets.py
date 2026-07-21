@@ -55,9 +55,12 @@ def remove_preset(config_path: Path, name: str) -> bool:
 
 
 def get_preset(config_path: Path, name: str) -> tuple[int, int] | None:
-    """获取预设坐标，不存在返回 None。"""
+    """获取预设坐标，不存在或结构无效返回 None。"""
     data = _read(config_path)
     preset = data.get(name)
-    if preset is None:
+    if not isinstance(preset, dict):
         return None
-    return preset["x"], preset["y"]
+    try:
+        return int(preset["x"]), int(preset["y"])
+    except (KeyError, TypeError, ValueError):
+        return None

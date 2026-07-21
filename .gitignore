@@ -11,3 +11,10 @@ config.json
 
 # 测试
 .pytest_cache/
+
+# 类型检查 / linter
+.mypy_cache/
+.ruff_cache/
+
+# 日志
+*.log

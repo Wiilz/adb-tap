@@ -4,50 +4,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**abd-tap** - Android 设备自动化点击工具，通过 ADB 在指定坐标附近持续随机偏移点击。
+**adb-tap** - Android 抢票极速点击工具。通过 ADB 持久 shell 会话在指定坐标附近持续随机偏移点击（~50 次/秒），支持 NTP 校时定时触发、提前盲打和预设坐标管理。
 
 ## Development Environment
 
-- **Python**: 3.13+ (see `.python-version`)
-- **Package Manager**: `uv` (uses `uv.lock`)
-- **Dependencies**: `abd>=0.0.3`, `adbutils>=2.12.0`
+- **Python**: 3.12+（`.python-version` 锁定 3.12.12）
+- **Package Manager**: `uv`（`uv.lock`）
+- **Dependencies**: `ntplib`（NTP 校时）；dev 组 `pytest`
+- **Entry Point**: `adb-tap`（注册于 `[project.scripts]`，指向 `adb_tap.cli:main`）
 
 ## Commonly Used Commands
 
 ```bash
-# Install dependencies
-uv sync
-
-# Run the main click script
-uv run python click_script.py <x> <y>
-
-# Example: Click near (500, 800)
-uv run python click_script.py 500 800
+uv sync                                    # 安装依赖
+uv run pytest -v                           # 运行测试
+uv run adb-tap preset add <名> <x> <y>     # 保存预设
+uv run adb-tap rush <预设> --at 12:00:00   # 定时抢票
+uv run adb-tap rush <预设> --no-ntp        # 立即盲打
 ```
+
+完整用法见 `README.md`。
 
 ## Code Architecture
 
-### Key Files
+源码在 `src/adb_tap/`，按单一职责拆分：
 
-- **`click_script.py`** - 主脚本：通过 subprocess 直接调用 ADB 执行点击操作
-  - 在指定坐标 ±4 像素范围内随机偏移点击
-  - 点击间隔：0.1 秒
-  - 按 `Ctrl+C` 停止
-  - **重要**：第 9 行硬编码了 ADB 路径 `ADB_PATH = r"D:\as\jdk\platform-tools\adb.exe"`，使用前需修改
+- **`cli.py`** - 命令行入口：argparse 子命令（preset/rush）、NTP 校时流程、shell 断开重连、Windows UTF-8 编码处理
+- **`device.py`** - ADB 交互：`resolve_adb_path`（路径解析）、`list_devices`、`AdbShell`（持久 shell + tap/close）、`monitor_touches`（取点）
+- **`clicker.py`** - 点击引擎：`run_clicks`（随机偏移循环、间隔下限 10ms、max_clicks/duration 停止），device 为 `TapDevice` 协议
+- **`scheduler.py`** - 定时：`sync_offset`（NTP 偏移）、`parse_target_time`（HH:MM:SS 解析）、`wait_until`（倒计时）
+- **`presets.py`** - 预设坐标：`add/remove/list/get`，读写 `config.json`（原子写入）
 
-- **`main.py`** - 占位入口文件，当前仅打印 "Hello from abd-tap!"
-
-- **`pyproject.toml`** - 项目配置和依赖定义
+测试在 `tests/`（test_presets/test_scheduler/test_device/test_clicker/test_cli）。`device.py` 的设备交互部分无单测，靠 `python -m adb_tap.device` 自检。
 
 ### Important Configuration
 
-- **ADB 路径**：`click_script.py:9` - 必须根据实际环境修改
-- **最大偏移量**：`click_script.py:12` - `MAX_OFFSET = 4`
-- **点击间隔**：`click_script.py:68` - `time.sleep(0.1)`
-
-## Note
-
-虽然 `pyproject.toml` 声明了 `abd` 和 `adbutils` 依赖，但 `click_script.py` 实际使用 `subprocess` 直接调用 ADB，并未使用这些库。
+- **ADB 路径**：优先级 `--adb-path` > 环境变量 `ADB_PATH` > PATH 中的 adb
+- **点击间隔**：`--interval`（默认 20ms，下限 10ms）
+- **随机偏移**：±4 像素（`clicker.run_clicks` 的 offset 参数）
+- **NTP 服务器**：`--ntp-server`（默认 ntp.aliyun.com）
+- **预设配置**：`config.json`（项目根，被 .gitignore 忽略）
 
 ## Git 提交规范
 
