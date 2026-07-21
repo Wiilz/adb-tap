@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -35,3 +36,28 @@ def test_resolve_raises_when_not_found(monkeypatch):
     monkeypatch.setattr(device.shutil, "which", lambda _: None)
     with pytest.raises(FileNotFoundError):
         device.resolve_adb_path(None)
+
+
+def test_list_devices_parses_online_devices():
+    fake_output = (
+        "List of devices attached\n"
+        "emulator-5554\tdevice\n"
+        "emulator-5556\toffline\n"
+        "abc123\tunauthorized\n"
+    )
+    with patch("adb_tap.device.subprocess.run") as mock_run:
+        mock_run.return_value = SimpleNamespace(stdout=fake_output)
+        serials = device.list_devices("adb")
+    assert serials == ["emulator-5554"]
+
+
+def test_list_devices_ignores_daemon_messages():
+    fake_output = (
+        "* daemon not running; starting now\n"
+        "* daemon started successfully\n"
+        "List of devices attached\n"
+    )
+    with patch("adb_tap.device.subprocess.run") as mock_run:
+        mock_run.return_value = SimpleNamespace(stdout=fake_output)
+        serials = device.list_devices("adb")
+    assert serials == []

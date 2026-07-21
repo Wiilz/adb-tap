@@ -3,7 +3,6 @@
 import os
 import shutil
 import subprocess
-from pathlib import Path
 
 
 def resolve_adb_path(explicit: str | None) -> str:
@@ -39,11 +38,12 @@ def list_devices(adb_path: str) -> list[str]:
         check=True,
     )
     serials: list[str] = []
-    for line in result.stdout.splitlines()[1:]:  # 跳过 "List of devices attached"
+    for line in result.stdout.splitlines():
         line = line.strip()
-        if not line:
+        # 跳过空行、表头与 daemon 启动消息
+        if not line or line.startswith("List of devices") or line.startswith("*"):
             continue
-        parts = line.split("\t")
+        parts = line.split()
         if len(parts) == 2 and parts[1] == "device":
             serials.append(parts[0])
     return serials
@@ -67,20 +67,29 @@ class AdbShell:
         )
 
     def tap(self, x: int, y: int) -> None:
-        """向 shell stdin 写入 input tap 命令。写入失败抛 BrokenPipeError。"""
+        """向 shell stdin 写入 input tap 命令。shell 已断时抛 BrokenPipeError 供上层重连。"""
         if self._process.stdin is None:
             raise BrokenPipeError("shell stdin 不可用")
-        self._process.stdin.write(f"input tap {x} {y}\n".encode())
-        self._process.stdin.flush()
+        try:
+            self._process.stdin.write(f"input tap {x} {y}\n".encode())
+            self._process.stdin.flush()
+        except BrokenPipeError:
+            raise
+        except OSError as exc:
+            raise BrokenPipeError("shell stdin 写入失败") from exc
 
     def close(self) -> None:
-        """关闭 stdin 并等待 shell 进程退出。"""
+        """关闭 stdin 并等待 shell 进程退出，超时后强制 kill。"""
         if self._process.stdin is not None:
             try:
                 self._process.stdin.close()
             except BrokenPipeError:
                 pass
-        self._process.wait(timeout=5)
+        try:
+            self._process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self._process.kill()
+            self._process.wait()
 
 
 def monitor_touches(adb_path: str, serial: str) -> None:
@@ -100,17 +109,26 @@ def monitor_touches(adb_path: str, serial: str) -> None:
         assert proc.stdout is not None
         for line in proc.stdout:
             line = line.strip()
-            if "ABS_MT_POSITION_X" in line:
-                x = int(line.split()[-1], 16)
-            elif "ABS_MT_POSITION_Y" in line:
-                y = int(line.split()[-1], 16)
-            elif line.startswith("EV_SYN") and x is not None and y is not None:
-                print(f"\r触摸坐标: ({x}, {y})", end="", flush=True)
-                x = y = None
+            try:
+                if "ABS_MT_POSITION_X" in line:
+                    x = int(line.split()[-1], 16)
+                elif "ABS_MT_POSITION_Y" in line:
+                    y = int(line.split()[-1], 16)
+                elif line.startswith("EV_SYN") and x is not None and y is not None:
+                    print(f"\r触摸坐标: ({x}, {y})", end="", flush=True)
+                    x = y = None
+            except ValueError:
+                # 某些设备 getevent token 非合法 hex，跳过该行
+                continue
     except KeyboardInterrupt:
         pass
     finally:
         proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
 
 if __name__ == "__main__":
@@ -122,6 +140,8 @@ if __name__ == "__main__":
     if not devices:
         raise SystemExit("无设备连接")
     shell = AdbShell(adb)
-    shell.tap(500, 500)
-    print("测试 tap 已发送到 (500, 500)")
-    shell.close()
+    try:
+        shell.tap(500, 500)
+        print("测试 tap 已发送到 (500, 500)")
+    finally:
+        shell.close()
