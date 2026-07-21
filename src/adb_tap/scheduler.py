@@ -2,6 +2,7 @@
 
 import time
 from datetime import datetime, timedelta
+from typing import Callable
 
 import ntplib
 
@@ -48,9 +49,9 @@ def _format_remaining(seconds: float) -> str:
 def wait_until(
     target: float,
     offset: float,
-    on_tick,
-    sleep=time.sleep,
-    clock=time.time,
+    on_tick: Callable[[str], None],
+    sleep: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.time,
 ) -> None:
     """阻塞直到校准时间到达 target。
 
@@ -62,6 +63,6 @@ def wait_until(
         if remaining <= 0:
             return
         on_tick(_format_remaining(remaining))
-        # 超过 10 秒每分钟刷一次，最后 10 秒逐秒刷
-        step = 1.0 if remaining <= 10 else min(60.0, remaining)
+        # 超过 10 秒按分钟刷（最多 60 秒一跳，确保降到 10 秒进入逐秒）
+        step = 1.0 if remaining <= 10 else min(60.0, remaining - 10)
         sleep(step)

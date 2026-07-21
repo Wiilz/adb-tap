@@ -114,3 +114,38 @@ def test_calibrated_now_applies_offset():
     base = time.time()
     assert scheduler.calibrated_now(5.0) >= base + 5.0
     assert scheduler.calibrated_now(-5.0) <= base
+
+
+def test_wait_until_refreshes_per_minute_then_secondly():
+    """超过10秒按分钟刷新、最后10秒逐秒，不会一步跳过逐秒阶段。"""
+    ticks: list[str] = []
+    elapsed = [0.0]
+
+    def fake_sleep(seconds: float) -> None:
+        elapsed[0] += seconds
+
+    def fake_clock() -> float:
+        return elapsed[0]
+
+    scheduler.wait_until(65.0, offset=0.0, on_tick=ticks.append,
+                         sleep=fake_sleep, clock=fake_clock)
+    assert ticks[0] == "01:05"
+    assert ticks[1] == "00:10"
+    assert ticks[-1] == "00:01"
+    assert len(ticks) == 11
+
+
+def test_wait_until_applies_offset():
+    """offset 与 clock 同侧相加：offset=-5、target=10 时首次剩余 15s。"""
+    ticks: list[str] = []
+    elapsed = [0.0]
+
+    def fake_sleep(seconds: float) -> None:
+        elapsed[0] += seconds
+
+    def fake_clock() -> float:
+        return elapsed[0]
+
+    scheduler.wait_until(10.0, offset=-5.0, on_tick=ticks.append,
+                         sleep=fake_sleep, clock=fake_clock)
+    assert ticks[0] == "00:15"
