@@ -130,13 +130,19 @@ def cmd_rush(config_path: Path, args) -> int:
     interrupted = False
 
     def _do_clicks(dev) -> int:
+        last_print = 0.0
+
         def on_progress(c: int) -> None:
-            nonlocal last_seen
+            nonlocal last_seen, last_print
             last_seen = c
-            print(
-                f"\r✅ 已点击 {total_clicks + c} 次 | {time.monotonic() - start:.1f}s",
-                end="", flush=True,
-            )
+            now = time.monotonic()
+            # 节流：首次或距上次打印≥0.1s 才刷新，避免高频点击被 I/O 拖慢
+            if c == 1 or now - last_print >= 0.1:
+                last_print = now
+                print(
+                    f"\r✅ 已点击 {total_clicks + c} 次 | {now - start:.1f}s",
+                    end="", flush=True,
+                )
 
         return clicker.run_clicks(
             dev, base_x=x, base_y=y,
@@ -178,6 +184,7 @@ def cmd_rush(config_path: Path, args) -> int:
                 print(f"\n❌ 重连失败：{exc}", file=sys.stderr)
                 interrupted = True
             else:
+                total_clicks += last_seen  # 累计第一次会话中断前的点击
                 last_seen = 0
                 total_clicks += _do_clicks(shell)
     except KeyboardInterrupt:
