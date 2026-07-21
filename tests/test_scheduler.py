@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -77,3 +78,39 @@ def test_parse_target_time_exactly_now_keeps_today():
     now = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
     target = scheduler.parse_target_time("12:00:00", now=now)
     assert target == now.timestamp()
+
+
+def test_wait_until_returns_immediately_when_past():
+    ticks: list[str] = []
+    target = scheduler.calibrated_now(0.0) - 1.0  # 已过 1 秒
+    scheduler.wait_until(target, offset=0.0, on_tick=ticks.append)
+    assert ticks == []
+
+
+def test_wait_until_counts_down_in_final_seconds():
+    """模拟最后几秒逐秒刷新。"""
+    ticks: list[str] = []
+    # 可控时钟：每次调用推进 1 秒；序列对应 remaining = 3,2,1,0(退出)
+    times = iter([0.0, 1.0, 2.0, 3.0])
+
+    def fake_clock():
+        return next(times)
+
+    def fake_sleep(_seconds: float) -> None:
+        pass
+
+    scheduler.wait_until(3.0, offset=0.0, on_tick=ticks.append,
+                         sleep=fake_sleep, clock=fake_clock)
+    assert ticks == ["00:03", "00:02", "00:01"]
+
+
+def test_format_remaining_handles_hours_and_minutes():
+    assert scheduler._format_remaining(125) == "02:05"
+    assert scheduler._format_remaining(3725) == "1:02:05"
+
+
+def test_calibrated_now_applies_offset():
+    """calibrated_now 在正偏移下应返回更大的时间戳。"""
+    base = time.time()
+    assert scheduler.calibrated_now(5.0) >= base + 5.0
+    assert scheduler.calibrated_now(-5.0) <= base

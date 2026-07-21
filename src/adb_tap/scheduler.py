@@ -33,3 +33,35 @@ def parse_target_time(hhmmss: str, now: datetime | None = None) -> float:
     if target < now:
         target += timedelta(days=1)
     return target.timestamp()
+
+
+def _format_remaining(seconds: float) -> str:
+    """将剩余秒数格式化为 H:MM:SS 或 MM:SS。"""
+    total = int(round(seconds))
+    hours, rem = divmod(total, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def wait_until(
+    target: float,
+    offset: float,
+    on_tick,
+    sleep=time.sleep,
+    clock=time.time,
+) -> None:
+    """阻塞直到校准时间到达 target。
+
+    - on_tick(remaining_str)：每次刷新调用，传入剩余时间字符串
+    - sleep / clock：用于测试注入
+    """
+    while True:
+        remaining = target - (clock() + offset)
+        if remaining <= 0:
+            return
+        on_tick(_format_remaining(remaining))
+        # 超过 10 秒每分钟刷一次，最后 10 秒逐秒刷
+        step = 1.0 if remaining <= 10 else min(60.0, remaining)
+        sleep(step)
