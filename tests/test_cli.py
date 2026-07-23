@@ -52,7 +52,15 @@ def test_cmd_rush_returns_2_on_missing_preset(tmp_path):
 
     config = tmp_path / "config.json"
     args = Namespace(
-        target=["missing"], at=None, interval=20, duration=None,
+        target=["missing"], at=None, workers=12, duration=None,
         no_ntp=True, ntp_server="ntp.aliyun.com", adb_path=None,
     )
     assert cli.cmd_rush(config, args) == 2
+
+
+def test_rush_parser_has_workers_no_interval():
+    """--workers 默认 12，且 --interval 已移除。"""
+    parser = cli.build_parser()
+    args = parser.parse_args(["rush", "buy", "--no-ntp"])
+    assert args.workers == 12
+    assert not hasattr(args, "interval")

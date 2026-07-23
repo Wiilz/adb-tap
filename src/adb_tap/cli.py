@@ -109,27 +109,27 @@ def cmd_rush(config_path: Path, args) -> int:
         print(f"错误：{exc}", file=sys.stderr)
         return 2
 
-    # 2. 解析 ADB 路径并连接设备
+    # 2. 解析 ADB 路径并确认设备
     try:
         adb_path = device.resolve_adb_path(args.adb_path)
     except FileNotFoundError as exc:
         print(f"错误：{exc}", file=sys.stderr)
         return 2
     print(f"🔌 连接设备（ADB: {adb_path}）...")
-    try:
-        shell = device.AdbShell(adb_path)
-    except RuntimeError as exc:
-        print(f"错误：{exc}", file=sys.stderr)
+    serials = device.list_devices(adb_path)
+    if not serials:
+        print("错误：没有已连接的设备，请用 adb devices 检查连接", file=sys.stderr)
         return 2
-    print(f"✅ 设备就绪：{shell.serial}")
+    serial = serials[0]
+    print(f"✅ 设备就绪：{serial}")
+    # 工厂：每次创建一个绑定该 serial 的持久 shell（跳过重复 list_devices）
+    factory = lambda: device.AdbShell(adb_path, serial)
 
-    interval_ms = args.interval
     start = time.monotonic()
-    total_clicks = 0
     last_seen = 0
     interrupted = False
 
-    def _do_clicks(dev) -> int:
+    def _do_clicks() -> int:
         last_print = 0.0
 
         def on_progress(c: int) -> None:
@@ -139,14 +139,11 @@ def cmd_rush(config_path: Path, args) -> int:
             # 节流：首次或距上次打印≥0.1s 才刷新，避免高频点击被 I/O 拖慢
             if c == 1 or now - last_print >= 0.1:
                 last_print = now
-                print(
-                    f"\r✅ 已点击 {total_clicks + c} 次 | {now - start:.1f}s",
-                    end="", flush=True,
-                )
+                print(f"\r✅ 已点击 {c} 次 | {now - start:.1f}s", end="", flush=True)
 
         return clicker.run_clicks(
-            dev, base_x=x, base_y=y,
-            interval_ms=interval_ms, duration=args.duration,
+            factory, base_x=x, base_y=y,
+            workers=args.workers, duration=args.duration,
             on_progress=on_progress,
         )
 
@@ -170,34 +167,18 @@ def cmd_rush(config_path: Path, args) -> int:
             scheduler.wait_until(target, offset, on_tick=_tick)
             print()  # 倒计时换行
 
-        # 5. 极速点击
-        print(f"🚀 开始在 ({x}, {y}) 附近极速点击（间隔 {interval_ms}ms，Ctrl+C 停止）...")
-        try:
-            total_clicks += _do_clicks(shell)
-        except BrokenPipeError:
-            print("\n⚠️ shell 断开，尝试重连一次...")
-            try:
-                shell.close()
-            except Exception:
-                pass
-            try:
-                shell = device.AdbShell(adb_path)
-            except RuntimeError as exc:
-                print(f"\n❌ 重连失败：{exc}", file=sys.stderr)
-                interrupted = True
-            else:
-                total_clicks += last_seen  # 累计第一次会话中断前的点击
-                last_seen = 0
-                total_clicks += _do_clicks(shell)
+        # 5. 极速点击（多 shell 并行；设备由 run_clicks 内部创建与关闭）
+        print(
+            f"🚀 开始在 ({x}, {y}) 附近极速点击（{args.workers} 路并行，Ctrl+C 停止）..."
+        )
+        total_clicks = _do_clicks()
     except KeyboardInterrupt:
         interrupted = True
-    finally:
-        shell.close()
+        total_clicks = last_seen
 
     elapsed = time.monotonic() - start
-    final_count = total_clicks + last_seen if interrupted else total_clicks
     suffix = "（已中断）" if interrupted else ""
-    print(f"\n🔚 停止{suffix}。共点击 {final_count} 次，耗时 {elapsed:.1f}s")
+    print(f"\n🔚 停止{suffix}。共点击 {total_clicks} 次，耗时 {elapsed:.1f}s")
     return 0
 
 
@@ -227,7 +208,7 @@ def build_parser() -> argparse.ArgumentParser:
     rush = sub.add_parser("rush", help="抢票点击")
     rush.add_argument("target", nargs="+", help="预设名 或 'x y' 坐标")
     rush.add_argument("--at", help="定时触发（HH:MM:SS），不指定则立即盲打")
-    rush.add_argument("--interval", type=int, default=20, help="点击间隔（毫秒，默认 20）")
+    rush.add_argument("--workers", type=int, default=12, help="并行 shell 数（默认 12，实测甜点；想压榨可调高）")
     rush.add_argument("--duration", type=float, default=None, help="持续秒数，不指定则 Ctrl+C 停止")
     rush.add_argument("--no-ntp", action="store_true", help="跳过 NTP 校时")
     rush.add_argument("--ntp-server", default="ntp.aliyun.com", help="NTP 服务器")
