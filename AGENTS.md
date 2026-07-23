@@ -25,9 +25,9 @@ uv run adb-tap rush <预设> --no-ntp        # 立即盲打
 
 源码在 `src/adb_tap/`，按单一职责拆分：
 
-- `cli.py` - 命令行入口：argparse 子命令（preset/rush）、NTP 校时、shell 断开重连、Windows UTF-8
+- `cli.py` - 命令行入口：argparse 子命令（preset/rush）、NTP 校时、多 shell 并行点击接线（device_factory）、Windows UTF-8
 - `device.py` - ADB 交互：`resolve_adb_path`、`list_devices`、`AdbShell`（持久 shell，tap 发后确认等待回执）、`monitor_touches`（取点，`_parse_touch_line` 解析 getevent）
-- `clicker.py` - 点击引擎：`run_clicks`（随机偏移、间隔下限 10ms、max_clicks/duration 停止）
+- `clicker.py` - 点击引擎：`run_clicks`（多 shell 并行、随机偏移、共享计数器 + threading.Event 停止、worker 内 BrokenPipe 重连）
 - `scheduler.py` - 定时：`sync_offset`（NTP）、`parse_target_time`、`wait_until`（倒计时）
 - `presets.py` - 预设坐标：`add/remove/list/get`，读写 `config.json`（原子写入）
 
@@ -36,7 +36,7 @@ uv run adb-tap rush <预设> --no-ntp        # 立即盲打
 ## 关键配置
 
 - ADB 路径优先级：`--adb-path` > 环境变量 `ADB_PATH` > PATH
-- 点击间隔：`--interval`（默认 20ms，下限 10ms）
+- 并行路数：`--workers`（默认 12，实测甜点；未 root 真机约 15 次/秒）
 - 随机偏移：±4 像素
 - NTP 服务器：`--ntp-server`（默认 ntp.aliyun.com）
 - 预设配置：`config.json`（被 .gitignore 忽略）
