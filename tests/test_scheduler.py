@@ -116,8 +116,8 @@ def test_calibrated_now_applies_offset():
     assert scheduler.calibrated_now(-5.0) <= base
 
 
-def test_wait_until_refreshes_per_minute_then_secondly():
-    """超过10秒按分钟刷新、最后10秒逐秒，不会一步跳过逐秒阶段。"""
+def test_wait_until_refreshes_every_second():
+    """倒计时应逐秒刷新，让用户看到持续变化的剩余时间。"""
     ticks: list[str] = []
     elapsed = [0.0]
 
@@ -130,9 +130,10 @@ def test_wait_until_refreshes_per_minute_then_secondly():
     scheduler.wait_until(65.0, offset=0.0, on_tick=ticks.append,
                          sleep=fake_sleep, clock=fake_clock)
     assert ticks[0] == "01:05"
-    assert ticks[1] == "00:10"
+    assert ticks[1] == "01:04"
+    assert ticks[59] == "00:06"
     assert ticks[-1] == "00:01"
-    assert len(ticks) == 11
+    assert len(ticks) == 65
 
 
 def test_wait_until_applies_offset():

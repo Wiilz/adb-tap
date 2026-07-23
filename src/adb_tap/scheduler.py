@@ -63,6 +63,4 @@ def wait_until(
         if remaining <= 0:
             return
         on_tick(_format_remaining(remaining))
-        # 超过 10 秒按分钟刷（最多 60 秒一跳，确保降到 10 秒进入逐秒）
-        step = 1.0 if remaining <= 10 else min(60.0, remaining - 10)
-        sleep(step)
+        sleep(1.0)  # 逐秒刷新，让用户看到持续变化的倒计时
