@@ -40,25 +40,26 @@ uv run adb-tap rush 540 1200 --at 12:00:00
 
 | 选项 | 说明 | 默认 |
 |------|------|------|
-| `--interval <毫秒>` | 相邻两次点击的最小间隔（下限 10ms） | 20 |
+| `--workers <路>` | 并行点击路数（多 shell 并发） | 12 |
 | `--duration <秒>` | 持续时间，到时自动停 | Ctrl+C 手动停 |
 | `--no-ntp` | 跳过 NTP 校时，用本地时间 | 关（开启校时） |
 | `--ntp-server <地址>` | NTP 服务器 | ntp.aliyun.com |
 | `--adb-path <路径>` | adb 可执行文件路径 | 环境变量 ADB_PATH / PATH |
 
-按 `Ctrl+C` 随时停止（回执确认机制保证停止后手机立即不再点击）。
+按 `Ctrl+C` 随时停止（每路采用发后确认，停止后最多残留 workers 次在途点击，无积压）。
 
-> 实际点击频率取决于手机执行 `input tap` 的真实速度（通常每秒数次到十几次），程序显示的点击数与手机实际执行保持一致。
+> 实际点击频率 ≈ 并行路数 × 单路速度，受手机 `input tap` 执行速度限制（本机 12 路约 15 次/秒）。程序显示的点击数与手机实际执行保持一致。
 
 ## 原理
 
-用持久 `adb shell` 子进程，通过 stdin 发送 `input tap` 命令，避免每次启动新进程的开销。每次点击后追加一个 `echo` 回执标记并同步等待 shell 应答（发后确认），确保程序计数与手机真实执行一致，且 Ctrl+C 退出后不会因管道积压而继续点击。NTP 校时保证定时触发的准确性，点击在基准坐标 ±4 像素内随机偏移。
+用多个持久 `adb shell` 子进程并行发送 `input tap` 命令（每路经 stdin 连续点击），靠设备侧的并行注入把频率乘上去——单路 `input tap` 较慢（本机约 1.7 次/秒），12 路并行约 15 次/秒。每路采用「发后确认」：每条命令后跟一个 `echo` 回执标记并同步等待 shell 应答，确保程序计数与手机真实执行一致，且 Ctrl+C 后最多残留 workers 次在途点击、无管道积压。NTP 校时保证定时触发的准确性，点击在基准坐标 ±4 像素内随机偏移。
 
 ## 开发
 
 ```bash
-uv sync                 # 安装依赖
-uv run pytest -v        # 运行测试
+uv sync                              # 安装依赖
+uv run pytest -v                     # 运行测试
+uv run python bench_tap.py 540 1200  # 点击吞吐基准（调 --workers 时参考）
 ```
 
 项目结构见 `CLAUDE.md`，提交规范见 [`docs/commit-convention.md`](docs/commit-convention.md)。
