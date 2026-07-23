@@ -45,7 +45,7 @@ feat(presets): 预设坐标增删查与 JSON 读写
 chore: 重构项目脚手架
 
 - 切换到 Python 3.12.12
-- 移除 abd、adbutils 无用依赖
+- 移除 adbutils 无用依赖
 ```
 
 ```
