@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**adb-tap** - Android 抢票极速点击工具。通过 ADB 持久 shell 会话在指定坐标附近持续随机偏移点击（~50 次/秒），支持 NTP 校时定时触发、提前盲打和预设坐标管理。
+**adb-tap** - Android 抢票极速点击工具。通过 ADB 持久 shell 会话在指定坐标附近持续随机偏移点击（发后确认，频率与真机真实执行一致），支持 NTP 校时定时触发、提前盲打和预设坐标管理。
 
 ## Development Environment
 
@@ -30,7 +30,7 @@ uv run adb-tap rush <预设> --no-ntp        # 立即盲打
 源码在 `src/adb_tap/`，按单一职责拆分：
 
 - **`cli.py`** - 命令行入口：argparse 子命令（preset/rush）、NTP 校时流程、shell 断开重连、Windows UTF-8 编码处理
-- **`device.py`** - ADB 交互：`resolve_adb_path`（路径解析）、`list_devices`、`AdbShell`（持久 shell + tap/close）、`monitor_touches`（取点）
+- **`device.py`** - ADB 交互：`resolve_adb_path`（路径解析）、`list_devices`、`AdbShell`（持久 shell + tap/close，tap 发后确认等待回执）、`monitor_touches`（取点，`_parse_touch_line` 解析 getevent）
 - **`clicker.py`** - 点击引擎：`run_clicks`（随机偏移循环、间隔下限 10ms、max_clicks/duration 停止），device 为 `TapDevice` 协议
 - **`scheduler.py`** - 定时：`sync_offset`（NTP 偏移）、`parse_target_time`（HH:MM:SS 解析）、`wait_until`（倒计时）
 - **`presets.py`** - 预设坐标：`add/remove/list/get`，读写 `config.json`（原子写入）

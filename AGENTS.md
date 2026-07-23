@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Android 抢票极速点击工具。通过 ADB 持久 shell 会话实现 ~50 次/秒点击，支持 NTP 校时定时触发、提前盲打和预设坐标管理。
+Android 抢票极速点击工具。通过 ADB 持久 shell 会话持续点击（发后确认，频率与真机真实执行一致），支持 NTP 校时定时触发、提前盲打和预设坐标管理。
 
 ## 开发环境
 
@@ -26,7 +26,7 @@ uv run adb-tap rush <预设> --no-ntp        # 立即盲打
 源码在 `src/adb_tap/`，按单一职责拆分：
 
 - `cli.py` - 命令行入口：argparse 子命令（preset/rush）、NTP 校时、shell 断开重连、Windows UTF-8
-- `device.py` - ADB 交互：`resolve_adb_path`、`list_devices`、`AdbShell`（持久 shell）、`monitor_touches`
+- `device.py` - ADB 交互：`resolve_adb_path`、`list_devices`、`AdbShell`（持久 shell，tap 发后确认等待回执）、`monitor_touches`（取点，`_parse_touch_line` 解析 getevent）
 - `clicker.py` - 点击引擎：`run_clicks`（随机偏移、间隔下限 10ms、max_clicks/duration 停止）
 - `scheduler.py` - 定时：`sync_offset`（NTP）、`parse_target_time`、`wait_until`（倒计时）
 - `presets.py` - 预设坐标：`add/remove/list/get`，读写 `config.json`（原子写入）
