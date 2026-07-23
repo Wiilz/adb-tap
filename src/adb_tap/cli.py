@@ -162,10 +162,12 @@ def cmd_rush(config_path: Path, args) -> int:
                 print(f"错误：--at 时间格式无效（{exc}）", file=sys.stderr)
                 return 2
             print(f"⏰ 目标时间 {args.at}，开始倒计时...")
-            scheduler.wait_until(
-                target, offset,
-                on_tick=lambda r: print(f"\r距开票还有 {r}", end="", flush=True),
-            )
+
+            def _tick(r: str, clear: bool = False) -> None:
+                # 串变短时（跨小时边界）用空格清掉行内残留再重写
+                print(f"\r距开票还有 {r}{' ' * 5 if clear else ''}", end="", flush=True)
+
+            scheduler.wait_until(target, offset, on_tick=_tick)
             print()  # 倒计时换行
 
         # 5. 极速点击

@@ -136,6 +136,30 @@ def test_wait_until_refreshes_every_second():
     assert len(ticks) == 65
 
 
+def test_wait_until_signals_clear_when_crossing_hour_boundary():
+    """跨小时边界（1:00:00 → 59:59）时标记 clear，供 CLI 清除行内残留。
+
+    CLI 用 \\r 行内刷新，新串比旧串短会残留旧字符形成 '59:5600'，
+    因此 wait_until 在串变短时应通过 clear=True 告知调用方先清行。
+    """
+    ticks: list[tuple[str, bool]] = []
+    elapsed = [0.0]
+
+    def fake_sleep(seconds: float) -> None:
+        elapsed[0] += seconds
+
+    def fake_clock() -> float:
+        return elapsed[0]
+
+    # 从 1 小时以上跨到 1 小时以内
+    scheduler.wait_until(3660.0, offset=0.0, on_tick=lambda r, clear=False: ticks.append((r, clear)),
+                         sleep=fake_sleep, clock=fake_clock)
+    assert ticks[0] == ("1:01:00", False)
+    assert ticks[61] == ("59:59", True)
+    # 不足 1 小时后一直 clear，不会再变长
+    assert all(clear for _, clear in ticks[61:])
+
+
 def test_wait_until_applies_offset():
     """offset 与 clock 同侧相加：offset=-5、target=10 时首次剩余 15s。"""
     ticks: list[str] = []

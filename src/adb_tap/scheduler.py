@@ -55,12 +55,18 @@ def wait_until(
 ) -> None:
     """阻塞直到校准时间到达 target。
 
-    - on_tick(remaining_str)：每次刷新调用，传入剩余时间字符串
+    - on_tick(remaining_str, clear=False)：每次刷新调用，clear=True 时
+      调用方应先清掉行内残留（跨小时边界字符串会变短）
     - sleep / clock：用于测试注入
     """
     while True:
         remaining = target - (clock() + offset)
         if remaining <= 0:
             return
-        on_tick(_format_remaining(remaining))
+        # 不足 1 小时的串短于 H:MM:SS，用行内刷新前需清掉旧尾部
+        # clear 用关键字传入，兼容只接收单参数的简单回调（如 list.append）
+        try:
+            on_tick(_format_remaining(remaining), clear=remaining < 3600)
+        except TypeError:
+            on_tick(_format_remaining(remaining))
         sleep(1.0)  # 逐秒刷新，让用户看到持续变化的倒计时
