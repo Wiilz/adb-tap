@@ -165,6 +165,17 @@ def test_tap_raises_broken_pipe_on_eof(monkeypatch):
         shell.tap(1, 2)
 
 
+def test_shell_uses_given_serial_without_listing(monkeypatch):
+    """传入 serial 时应跳过 list_devices，直接用该 serial 开 shell。"""
+    listed = []
+    monkeypatch.setattr(device, "list_devices", lambda p: listed.append(p) or ["unused"])
+    fake_proc = SimpleNamespace(stdin=io.BytesIO(), stdout=io.BytesIO())
+    monkeypatch.setattr(device.subprocess, "Popen", lambda *a, **k: fake_proc)
+    shell = device.AdbShell("adb", serial="my-serial")
+    assert shell.serial == "my-serial"
+    assert listed == []  # 未调用 list_devices
+
+
 # --- 字节流增量切行 ---
 
 def test_line_splitter_yields_complete_lines():

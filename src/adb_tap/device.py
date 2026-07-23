@@ -61,13 +61,16 @@ class AdbShell:
     # 回执确认标记（设备 shell 执行完 tap 后 echo 出来）
     ACK = "__ADB_TAP_ACK__"
 
-    def __init__(self, adb_path: str) -> None:
-        serials = list_devices(adb_path)
-        if not serials:
-            raise RuntimeError("没有已连接的设备，请用 adb devices 检查连接")
+    def __init__(self, adb_path: str, serial: str | None = None) -> None:
+        # serial 已知（并行场景复用）时跳过 list_devices，避免多次 adb devices
+        if serial is None:
+            serials = list_devices(adb_path)
+            if not serials:
+                raise RuntimeError("没有已连接的设备，请用 adb devices 检查连接")
+            serial = serials[0]
         self._adb_path = adb_path
-        self.serial = serials[0]
-        # 启动持久 shell，绑定到第一个设备；stdout 用管道读取回执
+        self.serial = serial
+        # 启动持久 shell，绑定到该设备；stdout 用管道读取回执
         self._process = subprocess.Popen(
             [adb_path, "-s", self.serial, "shell"],
             stdin=subprocess.PIPE,
