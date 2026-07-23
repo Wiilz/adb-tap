@@ -1,7 +1,7 @@
 [project]
 name = "adb-tap"
 dynamic = ["version"]
-description = "Android 抢票极速点击工具，支持 NTP 校时定时触发与预设坐标管理"
+description = "Android 手机极速点击工具，支持 NTP 校时定时触发与预设坐标管理"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

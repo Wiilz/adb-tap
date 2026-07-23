@@ -187,7 +187,7 @@ def cmd_rush(config_path: Path, args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="adb-tap", description="Android 抢票极速点击工具")
+    parser = argparse.ArgumentParser(prog="adb-tap", description="Android 手机极速点击工具")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="预设坐标配置文件路径")
 
     sub = parser.add_subparsers(dest="command", required=True)
@@ -209,7 +209,7 @@ def build_parser() -> argparse.ArgumentParser:
     preset_sub.add_parser("get", help="取点模式：实时显示手指触摸坐标")
 
     # rush 子命令
-    rush = sub.add_parser("rush", help="抢票点击")
+    rush = sub.add_parser("rush", help="极速点击")
     rush.add_argument("target", nargs="+", help="预设名 或 'x y' 坐标")
     rush.add_argument("--at", help="定时触发（HH:MM:SS），不指定则立即盲打")
     rush.add_argument("--workers", type=int, default=12, help="并行 shell 数（默认 12，实测甜点；想压榨可调高）")

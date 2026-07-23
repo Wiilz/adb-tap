@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Android 抢票极速点击工具。通过 ADB 持久 shell 会话持续点击（发后确认，频率与真机真实执行一致），支持 NTP 校时定时触发、提前盲打和预设坐标管理。
+Android 手机极速点击工具。通过 ADB 持久 shell 会话持续点击（发后确认，频率与真机真实执行一致），支持 NTP 校时定时触发、提前盲打和预设坐标管理。
 
 ## 开发环境
 
@@ -15,7 +15,7 @@ Android 抢票极速点击工具。通过 ADB 持久 shell 会话持续点击（
 uv sync                                    # 安装依赖
 uv run pytest -v                           # 运行测试
 uv run adb-tap preset add <名> <x> <y>     # 保存预设
-uv run adb-tap rush <预设> --at 12:00:00   # 定时抢票
+uv run adb-tap rush <预设> --at 12:00:00   # 定时点击
 uv run adb-tap rush <预设> --no-ntp        # 立即盲打
 ```
 
