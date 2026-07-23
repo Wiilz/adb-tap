@@ -109,6 +109,10 @@ def cmd_rush(config_path: Path, args) -> int:
         print(f"错误：{exc}", file=sys.stderr)
         return 2
 
+    if args.workers < 1:
+        print(f"错误：--workers 必须 ≥ 1（当前 {args.workers}）", file=sys.stderr)
+        return 2
+
     # 2. 解析 ADB 路径并确认设备
     try:
         adb_path = device.resolve_adb_path(args.adb_path)
